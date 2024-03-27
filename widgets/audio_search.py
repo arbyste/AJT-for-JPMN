@@ -20,6 +20,7 @@ try:
     from ..helpers.audio_manager import FileUrlData
     from .audio_sources import SourceEnableCheckbox
 except ImportError:
+
     def strip_html_and_media(s: str) -> str:
         return s  # noop
 
@@ -30,12 +31,19 @@ except ImportError:
     from widgets.audio_sources import SourceEnableCheckbox
 
 
-class AudioManagerProtocol(typing.Protocol):
-    def search_audio(self, src_text: str, **kwargs) -> list[FileUrlData]:
-        ...
+class FileSaveResultsProtocol(typing.Protocol):
+    successes: list
+    fails: list
 
-    def download_and_save_tags(self, hits: typing.Sequence[FileUrlData], play_on_finish: bool = False):
-        ...
+
+class AudioManagerProtocol(typing.Protocol):
+    def search_audio(self, src_text: str, **kwargs) -> list[FileUrlData]: ...
+
+    def download_and_save_tags(
+        self,
+        hits: typing.Sequence[FileUrlData],
+        on_finish: Callable[[FileSaveResultsProtocol], typing.Any],
+    ): ...
 
 
 class SearchBar(QWidget):
@@ -46,7 +54,7 @@ class SearchBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._search_line = QLineEdit()
-        self._search_button = QPushButton('Search')
+        self._search_button = QPushButton("Search")
         qconnect(self._search_line.returnPressed, self._search_button.click)
         self._initUI()
 
@@ -103,8 +111,7 @@ class SearchResultsTable(QTableWidget):
         cast(QWidget, self).setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setColumnCount(SearchResultsTableColumns.column_count())
         cast(QTableWidget, self).setHorizontalHeaderLabels(
-            ui_translate(item.name)
-            for item in SearchResultsTableColumns
+            ui_translate(item.name) for item in SearchResultsTableColumns
         )
         self.setSectionResizeModes()
 
@@ -160,10 +167,7 @@ class AudioSearchDialog(QDialog):
         self._src_field_selector = QComboBox()
         self._dest_field_selector = QComboBox()
         self._table_widget = SearchResultsTable()
-        self._button_box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok |
-            QDialogButtonBox.StandardButton.Cancel
-        )
+        self._button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self._button_box.button(QDialogButtonBox.StandardButton.Ok).setText("Add audio and close")
 
         # add search bar, button, and table to main layout
@@ -222,14 +226,22 @@ class AudioSearchDialog(QDialog):
         if not search_text:
             return
         # repopulate with new data
-        self._table_widget.populate_with_results(self._audio_manager.search_audio(
-            search_text,
-            split_morphemes=True,
-            ignore_inflections=False,
-            stop_if_one_source_has_results=False,
-        ))
+        self._table_widget.populate_with_results(
+            self._audio_manager.search_audio(
+                search_text,
+                split_morphemes=True,
+                ignore_inflections=False,
+                stop_if_one_source_has_results=False,
+            )
+        )
 
-    def set_note_fields(self, field_names: list[str], *, selected_src_field_name: str, selected_dest_field_name: str, ):
+    def set_note_fields(
+        self,
+        field_names: list[str],
+        *,
+        selected_src_field_name: str,
+        selected_dest_field_name: str,
+    ):
         for combo in (self._src_field_selector, self._dest_field_selector):
             combo.clear()
             combo.addItems(field_names)
@@ -255,12 +267,17 @@ class AnkiAudioSearchDialog(AudioSearchDialog):
 
     def _play_audio_file(self, file: FileUrlData):
         if os.path.isfile(file.url):
-            return sound.av_player.play_tags([SoundOrVideoTag(filename=file.url), ])
+            return sound.av_player.play_tags([SoundOrVideoTag(filename=file.url)])
         elif mw.col.media.have(file.desired_filename):
-            return sound.av_player.play_tags([SoundOrVideoTag(filename=file.desired_filename), ])
+            return sound.av_player.play_tags([SoundOrVideoTag(filename=file.desired_filename)])
         else:
             # file is not located on this computer and needs to be downloaded first.
-            return self._audio_manager.download_and_save_tags([file, ], play_on_finish=True)
+            return self._audio_manager.download_and_save_tags(
+                hits=[file],
+                on_finish=lambda results: sound.av_player.play_tags(
+                    [SoundOrVideoTag(filename=result.desired_filename) for result in results.successes]
+                ),
+            )
 
     def _open_audio_file(self, file: FileUrlData):
         tooltip(tr.qt_misc_loading(), period=1000)
@@ -287,7 +304,7 @@ def main():
         import string
 
         def gen_rand_str(length: int = 10):
-            return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+            return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
         return FileUrlData(
             url=f"https://example.com/{gen_rand_str()}.ogg",
@@ -316,7 +333,12 @@ def main():
     app = QApplication(sys.argv)
     dialog = AudioSearchDialog(MockAudioManager())
     dialog.set_note_fields(
-        ["Question", "Answer", "Audio", "Image", ],
+        [
+            "Question",
+            "Answer",
+            "Audio",
+            "Image",
+        ],
         selected_dest_field_name="Audio",
         selected_src_field_name="Question",
     )
@@ -330,5 +352,5 @@ def main():
     print(f"destination: {dialog.destination_field_name}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

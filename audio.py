@@ -3,16 +3,14 @@
 
 import collections
 import concurrent.futures
-import io
 import itertools
 from collections.abc import Collection, Iterable, Sequence
 from concurrent.futures import Future
-from typing import NamedTuple
+from typing import NamedTuple, Optional, Callable, Any
 
 import anki.collection
-from anki.sound import SoundOrVideoTag
 from anki.utils import html_to_text_line
-from aqt import gui_hooks, mw, sound
+from aqt import gui_hooks, mw
 from aqt.operations import QueryOp
 from aqt.utils import tooltip, showWarning
 
@@ -22,7 +20,8 @@ from .helpers.audio_manager import (
     FileUrlData,
     AudioManagerException,
     InitResult,
-    AudioSourceManagerFactory, TotalAudioStats
+    AudioSourceManagerFactory,
+    TotalAudioStats,
 )
 from .helpers.inflections import is_inflected
 from .helpers.tokens import tokenize, ParseableToken
@@ -43,24 +42,9 @@ class FileSaveResults(NamedTuple):
     fails: list[AudioManagerException]
 
 
-def report_results(r: FileSaveResults):
-    txt = io.StringIO()
-    if r.successes:
-        txt.write(f"<b>Added {len(r.successes)} files to the collection.</b><ol>")
-        txt.write(''.join(f"<li>{file.desired_filename}</li>" for file in r.successes))
-        txt.write("</ol>")
-    if r.fails:
-        txt.write(f"<b>Failed {len(r.fails)} files.</b><ol>")
-        txt.write(''.join(f"<li>{fail.file.desired_filename}: {fail.describe_short()}</li>" for fail in r.fails))
-        txt.write("</ol>")
-    if txt := txt.getvalue():
-        return tooltip(txt, period=7000, y_offset=80 + 18 * (len(r.successes) + len(r.fails)))
-
-
 def save_files(
-        futures: Collection[Future[DownloadedData]],
-        play_on_finish: bool = False,
-        notify_on_finish: bool = True,
+    futures: Collection[Future[DownloadedData]],
+    on_finish: Optional[Callable[[FileSaveResults], Any]],
 ) -> FileSaveResults:
     results = FileSaveResults([], [])
     for future in futures:
@@ -74,20 +58,14 @@ def save_files(
                 data=result.data,
             )
             results.successes.append(result)
-    if notify_on_finish is True:
-        report_results(results)
-    if play_on_finish is True:
-        sound.av_player.play_tags([SoundOrVideoTag(filename=result.desired_filename) for result in results.successes])
+    if on_finish:
+        on_finish(results)
     return results
 
 
 def only_missing(col: anki.collection.Collection, files: Collection[FileUrlData]):
-    """ Returns files that aren't present in the collection already. """
-    return (
-        file
-        for file in files
-        if not col.media.have(file.desired_filename)
-    )
+    """Returns files that aren't present in the collection already."""
+    return (file for file in files if not col.media.have(file.desired_filename))
 
 
 def iter_tokens(src_text: str) -> Iterable[ParseableToken]:
@@ -104,10 +82,10 @@ def iter_mecab_variants(token: MecabParsedToken):
 
 
 def format_audio_tags(hits: Collection[FileUrlData]):
-    return cfg.audio_settings.tag_separator.join(
-        f'[sound:{hit.desired_filename}]'
-        for hit in hits
-    )
+    """
+    Create [sound:filename.ext] tags that Anki understands.
+    """
+    return cfg.audio_settings.tag_separator.join(f"[sound:{hit.desired_filename}]" for hit in hits)
 
 
 def sorted_files(hits: Iterable[FileUrlData]):
@@ -131,12 +109,12 @@ def take_first_source(hits: dict[str, list[FileUrlData]]):
 
 class AnkiAudioSourceManager(AudioSourceManager):
     def search_audio(
-            self,
-            src_text: str,
-            *,
-            split_morphemes: bool,
-            ignore_inflections: bool,
-            stop_if_one_source_has_results: bool,
+        self,
+        src_text: str,
+        *,
+        split_morphemes: bool,
+        ignore_inflections: bool,
+        stop_if_one_source_has_results: bool,
     ) -> list[FileUrlData]:
         """
         Search audio files (pronunciations) for words contained in search text.
@@ -175,11 +153,10 @@ class AnkiAudioSourceManager(AudioSourceManager):
         return sorted_files(ensure_unique_files(itertools.chain(*hits.values())))
 
     def download_and_save_tags(
-            self,
-            hits: Sequence[FileUrlData],
-            *,
-            play_on_finish: bool = False,
-            notify_on_finish: bool = True,
+        self,
+        hits: Sequence[FileUrlData],
+        *,
+        on_finish: Optional[Callable[[FileSaveResults], Any]] = None,
     ) -> None:
         """
         Download and save audio files using QueryOp.
@@ -195,8 +172,7 @@ class AnkiAudioSourceManager(AudioSourceManager):
             op=lambda col: self._download_tags(only_missing(col, hits)),
             success=lambda futures: save_files(
                 futures,
-                play_on_finish=play_on_finish,
-                notify_on_finish=notify_on_finish,
+                on_finish=on_finish,
             ),
         ).run_in_background()
 
@@ -220,7 +196,7 @@ class AnkiAudioSourceManager(AudioSourceManager):
         return hits
 
     def _download_tags(self, hits: Iterable[FileUrlData]) -> list[Future[DownloadedData]]:
-        """ Download audio files from a remote. """
+        """Download audio files from a remote."""
 
         futures, results = [], []
 
@@ -269,10 +245,7 @@ class AnkiAudioSourceManagerFactory(AudioSourceManagerFactory):
 
     def _report_init_results(self, result: InitResult, notify_on_finish: bool):
         if result.errors:
-            showWarning('\n'.join(
-                f"Couldn't download audio source: {error.explanation}."
-                for error in result.errors
-            ))
+            showWarning("\n".join(f"Couldn't download audio source: {error.explanation}." for error in result.errors))
         elif notify_on_finish and result.sources:
             QueryOp(
                 parent=mw,
@@ -283,8 +256,7 @@ class AnkiAudioSourceManagerFactory(AudioSourceManagerFactory):
                     f"<li>Unique headwords: <code>{stats.unique_headwords}</code></li></ul>",
                     period=5000,
                 ),
-            ).without_collection(
-            ).run_in_background()
+            ).without_collection().run_in_background()
         print("Initialized all audio sources.")
 
 
