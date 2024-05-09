@@ -9,22 +9,27 @@ from collections.abc import Iterable
 
 from aqt.qt import *
 
+
 try:
     from .table import ExpandingTableWidget, CellContent, TableRow
     from ..helpers.audio_manager import AudioSourceConfig, normalize_filename
+    from ..helpers.misc import clamp
 except ImportError:
     from table import ExpandingTableWidget, CellContent, TableRow
     from helpers.audio_manager import AudioSourceConfig, normalize_filename
+    from helpers.misc import clamp
 
 
 class SourceEnableCheckbox(QCheckBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
         QCheckBox {
             margin: 0 auto;
         }
-        """)
+        """
+        )
 
 
 def tooltip_cache_remove_complete(removed: list[AudioSourceConfig]):
@@ -45,8 +50,7 @@ def tooltip_cache_remove_complete(removed: list[AudioSourceConfig]):
 
 
 class AudioManagerInterface(typing.Protocol):
-    def request_new_session(self):
-        ...
+    def request_new_session(self): ...
 
 
 class AudioSourcesTable(ExpandingTableWidget):
@@ -95,7 +99,10 @@ class AudioSourcesTable(ExpandingTableWidget):
             current_row = self.currentRow()
             current_source_copy = pack_back(self.getRowCellContents(current_row))
             self.removeRow(current_row)
-            self.addSource(current_source_copy, index=max(0, min(current_row + offset, self.rowCount() - 1)))
+            self.addSource(
+                current_source_copy,
+                index=clamp(min_val=0, val=current_row + offset, max_val=self.rowCount() - 1),
+            )
 
         action = QAction("Move row down", self)
         qconnect(action.triggered, lambda: move_current_row(1))
@@ -119,15 +126,15 @@ class AudioSourcesTable(ExpandingTableWidget):
         return isinstance(cell, QCheckBox) and cell.isChecked() or super().isCellFilled(cell)
 
     def addSource(self, source: AudioSourceConfig, index: int = None):
-        self.addRow((checkbox := SourceEnableCheckbox(), source.name, source.url,), index=index)
+        self.addRow((checkbox := SourceEnableCheckbox(), source.name, source.url), index=index)
         # The checkbox widget has to notify the table widget when its state changes.
         # Otherwise, the table will not automatically add/remove rows.
         qconnect(checkbox.stateChanged, lambda checked: self.onCellChanged(self.currentRow()))
         checkbox.setChecked(source.enabled)
 
     def addEmptyLastRow(self):
-        """ Redefine this method. """
-        return self.addSource(AudioSourceConfig(True, "", "", ), index=self.rowCount())
+        """Redefine this method."""
+        return self.addSource(AudioSourceConfig(True, "", ""), index=self.rowCount())
 
     def iterateConfigs(self) -> Iterable[AudioSourceConfig]:
         """
@@ -138,7 +145,7 @@ class AudioSourcesTable(ExpandingTableWidget):
             if all(row) and (row := pack_back(row)).is_valid:
                 row.name = normalize_filename(row.name)
                 while row.name in sources:
-                    row.name += '(new)'
+                    row.name += "(new)"
                 sources[row.name] = row
         return sources.values()
 
@@ -156,7 +163,7 @@ class AudioSourcesTable(ExpandingTableWidget):
 
     def fillCellContent(self, row_n: int, col_n: int, content: str):
         if isinstance(cell := self.getCellContent(row_n, col_n), QCheckBox):
-            return cell.setChecked(any(value in content.lower() for value in ('true', 'yes', 'y')))
+            return cell.setChecked(any(value in content.lower() for value in ("true", "yes", "y")))
         return super().fillCellContent(row_n, col_n, content)
 
 
@@ -188,10 +195,10 @@ class App(QWidget):
         layout.addWidget(self.table)
 
         # example rows
-        self.table.addSource(AudioSourceConfig(True, 'NHK1', '/test/nhk/1.json', ))
-        self.table.addSource(AudioSourceConfig(False, 'NHK2', '/test/nhk/2.json', ))
-        self.table.addSource(AudioSourceConfig(True, 'NHK3', '/test/nhk/3.json', ))
-        self.table.addSource(AudioSourceConfig(False, 'NHK4', '/test/nhk/4.json', ))
+        self.table.addSource(AudioSourceConfig(True, "NHK1", "/test/nhk/1.json"))
+        self.table.addSource(AudioSourceConfig(False, "NHK2", "/test/nhk/2.json"))
+        self.table.addSource(AudioSourceConfig(True, "NHK3", "/test/nhk/3.json"))
+        self.table.addSource(AudioSourceConfig(False, "NHK4", "/test/nhk/4.json"))
 
 
 def main():
@@ -204,5 +211,5 @@ def main():
     sys.exit()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

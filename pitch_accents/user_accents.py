@@ -18,14 +18,12 @@ except ImportError:
 
 
 def search_pitch_accent_numbers(accents: str) -> Iterable[Union[str, int]]:
-    return (
-        (int(pos) if pos != NO_ACCENT else NO_ACCENT)
-        for pos in accents.split(',')
-    )
+    return ((int(pos) if pos != NO_ACCENT else NO_ACCENT) for pos in accents.split(","))
 
 
 class AccentEntry(NamedTuple):
-    """ Represents a parsed entry in the user TSV file. """
+    """Represents a parsed entry in the user TSV file."""
+
     headword: str
     moras: tuple[str, ...]
     accents: tuple[Union[str, int], ...]
@@ -35,7 +33,7 @@ class AccentEntry(NamedTuple):
 
     @classmethod
     def from_csv_line(cls, line: str):
-        headword, reading, accents = line.split('\t')
+        headword, reading, accents = line.split("\t")
         return cls(
             headword=headword,
             moras=tuple(kana_to_moras(to_katakana(reading or headword))),
@@ -46,7 +44,7 @@ class AccentEntry(NamedTuple):
 def create_formatted(entry: AccentEntry) -> Collection[FormattedEntry]:
     return dict.fromkeys(
         FormattedEntry(
-            katakana_reading=''.join(entry.moras),
+            katakana_reading="".join(entry.moras),
             html_notation=format_entry(entry.moras, pitch_num),
             pitch_number=str(pitch_num),
         )
@@ -72,7 +70,7 @@ class UserAccentData:
                     yield AccentEntry.from_csv_line(line)
 
     def create_formatted(self) -> AccentDict:
-        """ Build the derived pitch accents file from the original pitch accents file and save it as *.csv """
+        """Build the derived pitch accents file from the original pitch accents file and save it as *.csv"""
         temp_dict: AccentDict = collections.defaultdict(dict)
         for entry in self.read_entries():
             temp_dict[entry.headword].update(create_formatted(entry))
@@ -92,5 +90,5 @@ def main():
         print(f"{key=}; {value=}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

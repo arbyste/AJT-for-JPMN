@@ -1,11 +1,14 @@
 # Ignored files
 __pycache__
+.mypy_cache
 .idea
+.vscode
 *.pickle
 *.db
 *.sqlite
 *.sqlite3
-/meta.json
-/manifest.json
-/*.ankiaddon
-/user_files/user_data*
+meta.json
+manifest.json
+*.ankiaddon
+user_files/user_data*
+*TODO*

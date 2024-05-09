@@ -29,16 +29,13 @@ def read_formatted_accents() -> AccentDict:
     """
     acc_dict: AccentDict = collections.defaultdict(list)
     with open(FORMATTED_ACCENTS_TSV, newline="", encoding="utf-8") as f:
-        reader = csv.reader(f, delimiter='\t', quoting=csv.QUOTE_NONE)
+        reader = csv.reader(f, delimiter="\t", quoting=csv.QUOTE_NONE)
         for word, kana, *pitch_data in reader:
             entry = FormattedEntry(kana, *pitch_data)
             for key in (word, kana):
                 if entry not in acc_dict[key]:
                     acc_dict[key].append(entry)
-    acc_dict = AccentDict({
-        headword: tuple(entries)
-        for headword, entries in acc_dict.items()
-    })
+    acc_dict = AccentDict({headword: tuple(entries) for headword, entries in acc_dict.items()})
     return acc_dict
 
 
@@ -51,12 +48,12 @@ def accents_dict_init() -> AccentDict:
     if should_regenerate(FORMATTED_ACCENTS_PICKLE):
         print("The pickle needs updating.")
         acc_dict = read_formatted_accents()
-        with open(FORMATTED_ACCENTS_PICKLE, 'wb') as f:
+        with open(FORMATTED_ACCENTS_PICKLE, "wb") as f:
             # Pickle the dictionary using the highest protocol available.
             pickle.dump(acc_dict, f, pickle.HIGHEST_PROTOCOL)
     else:
         print("Reading from existing accents pickle.")
-        with open(FORMATTED_ACCENTS_PICKLE, 'rb') as f:
+        with open(FORMATTED_ACCENTS_PICKLE, "rb") as f:
             acc_dict = pickle.load(f)
 
     # Finally, patch with user-defined entries.
@@ -84,19 +81,18 @@ class AccentDictManager:
                 return self[variant]
 
     def reload_from_disk(self):
-        """ Reads pitch accents file from disk. """
+        """Reads pitch accents file from disk."""
         print("Reading pitch accents file...")
         QueryOp(
             parent=mw,
             op=lambda collection: accents_dict_init(),
             success=lambda dictionary: self._reload_dict(dictionary),
-        ).without_collection(
-        ).with_progress(
-            "Reloading pitch accent dictionary..."
+        ).without_collection().with_progress(
+            "Reloading pitch accent dictionary...",
         ).run_in_background()
 
     def _reload_dict(self, new_dict: AccentDict):
-        """ Reloads accent db (e.g. when the user changed settings). """
+        """Reloads accent db (e.g. when the user changed settings)."""
         print("Reloading accent dictionary...")
         self._db.clear()
         self._db = new_dict
@@ -110,5 +106,5 @@ def main():
             print(f"{word}\t{entry.katakana_reading}\t{entry.pitch_number}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

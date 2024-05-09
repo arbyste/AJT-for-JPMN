@@ -5,12 +5,13 @@ import dataclasses
 
 from aqt.qt import *
 
+
 try:
-    from ..helpers import ui_translate
     from ..helpers.audio_manager import TotalAudioStats, AudioStats
+    from ..ajt_common.utils import ui_translate
 except ImportError:
-    from helpers import ui_translate
     from helpers.audio_manager import TotalAudioStats, AudioStats
+    from ajt_common.utils import ui_translate
 
 
 class AudioStatsTable(QTableWidget):
@@ -61,7 +62,7 @@ def get_mock_stats() -> TotalAudioStats:
             AudioStats("tick", 5, 6),
             AudioStats("tack", 7, 7),
             AudioStats("toe", 10, 9),
-        ]
+        ],
     )
 
 
@@ -73,5 +74,5 @@ def main():
     app.exec()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

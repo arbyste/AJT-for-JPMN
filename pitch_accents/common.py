@@ -13,7 +13,7 @@ except ImportError:
 
 
 def is_dunder(name: str) -> bool:
-    """ Returns whether name is a dunder name. """
+    """Returns whether name is a dunder name."""
     return name.startswith("__") and name.endswith("__")
 
 
@@ -31,8 +31,7 @@ def is_old(file_path: str) -> bool:
     Return True if the file pointed by file_path is older than the other files.
     """
     return any(
-        os.path.getmtime(cmp_file_path) > os.path.getmtime(file_path)
-        for cmp_file_path in files_in_dir(THIS_DIR_PATH)
+        os.path.getmtime(cmp_file_path) > os.path.getmtime(file_path) for cmp_file_path in files_in_dir(THIS_DIR_PATH)
     )
 
 
@@ -40,11 +39,7 @@ def should_regenerate(file_path: str) -> bool:
     """
     Return True if the pickle file pointed by file_path needs to be regenerated.
     """
-    return (
-            not os.path.isfile(file_path)
-            or os.path.getsize(file_path) < 1
-            or is_old(file_path)
-    )
+    return not os.path.isfile(file_path) or os.path.getsize(file_path) < 1 or is_old(file_path)
 
 
 class FormattedEntry(NamedTuple):
@@ -62,7 +57,7 @@ class FormattedEntry(NamedTuple):
 
 AccentDict = NewType("AccentDict", dict[str, Sequence[FormattedEntry]])
 
-RE_PITCH_NUM = re.compile(r'\d+|\?')
+RE_PITCH_NUM = re.compile(r"\d+|\?")
 
 
 def split_pitch_numbers(s: str) -> list[str]:
@@ -80,5 +75,5 @@ def main():
     print(split_pitch_numbers("1"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

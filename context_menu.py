@@ -4,6 +4,7 @@
 import abc
 from typing import Optional
 
+import aqt
 from aqt import gui_hooks
 from aqt.editor import EditorWebView, Editor
 from aqt.qt import *
@@ -18,7 +19,7 @@ from .reading import generate_furigana
 
 
 class ContextMenuAction(abc.ABC):
-    subclasses: list[type['ContextMenuAction']] = []
+    subclasses: list[type["ContextMenuAction"]] = []
     shown_when_not_editing = False
 
     def __init_subclass__(cls, **kwargs):
@@ -28,6 +29,13 @@ class ContextMenuAction(abc.ABC):
     def __init__(self, editor: Editor = None, webview: AnkiWebView = None):
         self.editor = editor
         self.webview = webview or editor.web
+
+    def _parent_window(self) -> QWidget:
+        if self.editor:
+            return self.editor.parentWindow
+        if self.webview:
+            return self.webview.window() or aqt.mw
+        raise RuntimeError("Parent should be passed to instance.")
 
     @classmethod
     def enabled(cls) -> bool:
@@ -102,7 +110,23 @@ class LookUpWord(ContextMenuAction):
         try:
             lookup_goldendict(text)
         except RuntimeError as ex:
-            tooltip(str(ex))
+            tooltip(str(ex), parent=self._parent_window())
+
+
+class BrowserSearch(ContextMenuAction):
+    key = "browser_search"
+    label = "Browser Search"
+    shown_when_not_editing = True
+
+    def action(self, search_text: str) -> None:
+        """
+        Paste selected text into the Browser's search bar and perform search.
+        """
+        if not search_text:
+            return tooltip("Empty selection.", parent=self._parent_window())
+        browser = aqt.dialogs.open("Browser", aqt.mw)  # browser requires mw (AnkiQt) to be passed as parent
+        browser.activateWindow()
+        browser.search_for(search_text)
 
 
 def add_editor_context_menu_items(webview: EditorWebView, menu: QMenu) -> None:

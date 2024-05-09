@@ -20,7 +20,7 @@ try:
         AudioSourceConfig,
         AudioManagerHttpClient,
         FileUrlData,
-        AudioSettingsProtocol
+        AudioSettingsProtocol,
     )
     from ..pitch_accents.common import split_pitch_numbers
     from .audio_json_schema import FileInfo
@@ -28,12 +28,12 @@ try:
     from .file_ops import find_config_json
     from ..mecab_controller.kana_conv import to_katakana
 except ImportError:
-    from http_client import (
+    from helpers.http_client import (
         AudioManagerException,
         AudioSourceConfig,
         AudioManagerHttpClient,
         FileUrlData,
-        AudioSettingsProtocol
+        AudioSettingsProtocol,
     )
     from pitch_accents.common import split_pitch_numbers
     from helpers.audio_json_schema import FileInfo
@@ -43,11 +43,7 @@ except ImportError:
 
 
 def file_exists(file_path: str):
-    return (
-            file_path
-            and os.path.isfile(file_path)
-            and os.stat(file_path).st_size > 0
-    )
+    return file_path and os.path.isfile(file_path) and os.stat(file_path).st_size > 0
 
 
 RE_FILENAME_PROHIBITED = re.compile(r'[\\\n\t\r#%&\[\]{}<>^*?/$!\'":@+`|=]+', flags=re.MULTILINE | re.IGNORECASE)
@@ -55,7 +51,7 @@ MAX_LEN_BYTES = 120 - 4
 
 
 def cut_to_anki_size(text: str) -> str:
-    return text.encode('utf-8')[:MAX_LEN_BYTES].decode('utf-8', errors='ignore')
+    return text.encode("utf-8")[:MAX_LEN_BYTES].decode("utf-8", errors="ignore")
 
 
 def normalize_filename(text: str) -> str:
@@ -64,9 +60,10 @@ def normalize_filename(text: str) -> str:
     ensure there are no questionable characters that some OSes may panic from.
     """
     import unicodedata
+
     text = cut_to_anki_size(text)
-    text = unicodedata.normalize('NFC', text)
-    text = re.sub(RE_FILENAME_PROHIBITED, '_', text)
+    text = unicodedata.normalize("NFC", text)
+    text = re.sub(RE_FILENAME_PROHIBITED, "_", text)
     return text.strip()
 
 
@@ -76,7 +73,7 @@ def norm_pitch_numbers(s: str) -> str:
     When an audio file has more than one accent, it basically represents two or more words chained together.
     E.g., かも-知れない (1-0), 黒い-霧 (2-0), 作用,反作用の,法則 (1-3-0), 八幡,大菩薩 (2-3), 入り代わり-立ち代わり (0-0), 七転,八起き (3-1)
     """
-    return '-'.join(split_pitch_numbers(s)) or '?'
+    return "-".join(split_pitch_numbers(s)) or "?"
 
 
 @dataclasses.dataclass
@@ -94,13 +91,12 @@ class AudioSource(AudioSourceConfig):
         # which will be used if set.
         # Otherwise, fall back to relative path.
         self.raise_if_not_ready()
-        return (
-                self.db.get_media_dir_abs(self.name)
-                or self.join(os.path.dirname(self.url), self.db.get_media_dir_rel(self.name))
+        return self.db.get_media_dir_abs(self.name) or self.join(
+            os.path.dirname(self.url), self.db.get_media_dir_rel(self.name)
         )
 
     def join(self, *args) -> Union[str, bytes]:
-        """ Join multiple paths. """
+        """Join multiple paths."""
         if self.is_local:
             # Local paths are platform-dependent.
             return os.path.join(*args)
@@ -155,10 +151,7 @@ class TotalAudioStats:
 
 def read_zip(zip_in: zipfile.ZipFile, audio_source: AudioSource) -> bytes:
     try:
-        return zip_in.read(next(
-            name for name in zip_in.namelist()
-            if name.endswith('.json')
-        ))
+        return zip_in.read(next(name for name in zip_in.namelist() if name.endswith(".json")))
     except (StopIteration, zipfile.BadZipFile) as ex:
         raise AudioManagerException(
             audio_source,
@@ -171,23 +164,22 @@ class AddonConfigProtocol(Protocol):
     audio_sources: dict
     audio_settings: AudioSettingsProtocol
 
-    def iter_audio_sources(self):
-        ...
+    def iter_audio_sources(self): ...
 
 
 class AudioSourceManager:
     def __init__(
-            self, config: AddonConfigProtocol,
-            http_client: Optional[AudioManagerHttpClient],
-            db: Sqlite3Buddy,
-            audio_sources: list[AudioSource],
+        self,
+        config: AddonConfigProtocol,
+        http_client: Optional[AudioManagerHttpClient],
+        db: Sqlite3Buddy,
+        audio_sources: list[AudioSource],
     ):
         self._config = config
         self._http_client = http_client
         self._db: Sqlite3Buddy = db
         self._audio_sources: dict[str, AudioSource] = {
-            source.name: dataclasses.replace(source, db=self._db)
-            for source in audio_sources
+            source.name: dataclasses.replace(source, db=self._db) for source in audio_sources
         }
 
     @property
@@ -245,36 +237,42 @@ class AudioSourceManager:
         file_info: FileInfo = self._db.get_file_info(source.name, file.file_name)
 
         # Append either pitch pattern or kana reading, preferring pitch pattern.
-        if file_info['pitch_pattern']:
-            components.append(to_katakana(file_info['pitch_pattern']))
-        elif file_info['kana_reading']:
-            components.append(to_katakana(file_info['kana_reading']))
+        if file_info["pitch_pattern"]:
+            components.append(to_katakana(file_info["pitch_pattern"]))
+        elif file_info["kana_reading"]:
+            components.append(to_katakana(file_info["kana_reading"]))
 
         # If pitch number is present, append it after reading.
-        if file_info['pitch_number']:
-            components.append(norm_pitch_numbers(file_info['pitch_number']))
+        if file_info["pitch_number"]:
+            components.append(norm_pitch_numbers(file_info["pitch_number"]))
 
-        desired_filename = '_'.join((file.headword, *components, source.name,))
-        desired_filename = f'{normalize_filename(desired_filename)}{os.path.splitext(file.file_name)[-1]}'
+        desired_filename = "_".join(
+            (
+                file.headword,
+                *components,
+                source.name,
+            )
+        )
+        desired_filename = f"{normalize_filename(desired_filename)}{os.path.splitext(file.file_name)[-1]}"
 
         return FileUrlData(
             url=source.join(source.media_dir, file.file_name),
             desired_filename=desired_filename,
             word=file.headword,
             source_name=source.name,
-            reading=(file_info['kana_reading'] or ""),
-            pitch_number=(file_info['pitch_number'] or "?"),
+            reading=(file_info["kana_reading"] or ""),
+            pitch_number=(file_info["pitch_number"] or "?"),
         )
 
     def _read_local_json(self, source: AudioSource):
-        if source.url.endswith('.zip'):
+        if source.url.endswith(".zip"):
             # Read from a zip file that is expected to contain a json file with audio source data.
             with zipfile.ZipFile(source.url) as zip_in:
                 print(f"Reading local zip audio source: {source.url}")
                 self.db.insert_data(source.name, json.loads(read_zip(zip_in, source)))
         else:
             # Read an uncompressed json file.
-            with open(source.url, encoding='utf8') as f:
+            with open(source.url, encoding="utf8") as f:
                 print(f"Reading local json audio source: {source.url}")
                 self.db.insert_data(source.name, json.load(f))
 
@@ -290,7 +288,7 @@ class AudioSourceManager:
 
     def _get_file(self, file: FileUrlData) -> bytes:
         if os.path.isfile(file.url):
-            with open(file.url, 'rb') as f:
+            with open(file.url, "rb") as f:
                 return f.read()
         else:
             return self._http_client.download(file)
@@ -393,11 +391,11 @@ def main():
         print(f"{stats.unique_headwords=}")
         for source_stats in stats.sources:
             print(source_stats)
-        for file in aud_mgr.search_word('ひらがな'):
+        for file in aud_mgr.search_word("ひらがな"):
             print(file)
         for source in aud_mgr.audio_sources:
             print(f"source {source.name} media dir {source.media_dir}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
