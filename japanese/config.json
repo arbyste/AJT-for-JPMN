@@ -1,7 +1,8 @@
 {
-  "cache_lookups": 1024,
+  "cache_lookups": 8192,
   "last_file_save_location": "",
   "show_welcome_guide": true,
+  "insert_scripts_into_templates": true,
   "profiles": [
     {
       "name": "Add furigana for sentence",
@@ -53,10 +54,10 @@
     "output_hiragana": false,
     "kana_lookups": true,
     "skip_numbers": true,
-    "reading_separator": "・",
-    "word_separator": "、",
-    "blocklisted_words": "は,と,た,ね,さ,いる,ましょ,び,たち,こと,へ,たい,が,ば,から,て,ん,に,や,で,ます,し,です,き,だ,も,私,する,か,よ,てる,う,お,ない,な,の,せる,そりゃ,あもう",
-    "maximum_results": 100,
+    "reading_separator": ", ",
+    "word_separator": "; ",
+    "blocklisted_words": "は,と,た,ね,さ,いる,ましょ,び,たち,こと,へ,たい,が,ば,から,て,ん,に,や,で,ます,し,です,き,だ,も,私,する,か,よ,てる,う,お,ない,な,の,せる,そりゃ,あもう,め,げ",
+    "maximum_results": 3,
     "discard_mode": "discard_extra",
     "html_style": "none"
   },
@@ -168,16 +169,17 @@
     "size_unit": 25,
     "x_step": 50,
     "text_dx": -12,
-    "tspan_dx": -3,
+    "tspan_dx": -1,
     "graph_height": 40,
     "graph_visible_height": 100,
     "stroke_width": 2.5,
     "circle_radius": 5.25,
     "font_size": 24.0,
+    "letter_spacing": -4.0,
     "devoiced_circle_width": 1.5,
     "devoiced_circle_radius": 17.0,
     "devoiced_circle_dy": 3,
-    "devoiced_rectangle_padding": 5.0,
+    "devoiced_rectangle_padding": 2.0,
     "devoiced_stroke_dasharray": "2 3"
   }
 }

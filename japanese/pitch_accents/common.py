@@ -1,7 +1,10 @@
 # Copyright: Ren Tatsumoto <tatsu at autistici.org>
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 import collections
+import csv
+import enum
 import os
+import pathlib
 import re
 import typing
 from collections.abc import Iterable, Sequence
@@ -13,6 +16,21 @@ Stored = typing.TypeVar("Stored")
 
 RE_PITCH_NUM = re.compile(r"\d+|\?")
 RE_PITCH_TAG = re.compile(r"(<[^<>]+>)")
+
+
+class AccDictRawTSVEntry(typing.TypedDict):
+    """Entry as it appears in the pitch accents file."""
+
+    headword: str
+    katakana_reading: str
+    html_notation: str
+    pitch_number: str  # can't be converted to int. might contain separators and special symbols.
+    frequency: str  # must be converted to int. larger number => more occurrences.
+
+
+class AccDictProvider:
+    bundled = "bundled"
+    user = "user"
 
 
 class FormattedEntry(NamedTuple):
@@ -41,7 +59,9 @@ def is_dunder(name: str) -> bool:
     return name.startswith("__") and name.endswith("__")
 
 
-def files_in_dir(dir_path: str) -> Iterable[str]:
+def files_in_dir(dir_path: pathlib.Path) -> Iterable[str]:
+    if not dir_path.is_dir():
+        raise ValueError(f"not a directory: {dir_path}")
     return (
         os.path.normpath(os.path.join(root, file))
         for root, dirs, files in os.walk(dir_path)
@@ -50,29 +70,8 @@ def files_in_dir(dir_path: str) -> Iterable[str]:
     )
 
 
-def is_old(pickle_file_path: str) -> bool:
-    """
-    Return True if the file pointed by file_path is older than the other files.
-    """
-    return any(
-        os.path.getmtime(cmp_file_path) > os.path.getmtime(pickle_file_path)
-        for cmp_file_path in files_in_dir(PITCH_DIR_PATH)
-    )
-
-
-def should_regenerate(pickle_file_path: str) -> bool:
-    """
-    Return True if the pickle file pointed by file_path needs to be regenerated.
-    """
-    return not os.path.isfile(pickle_file_path) or os.path.getsize(pickle_file_path) < 1 or is_old(pickle_file_path)
-
-
 def split_pitch_numbers(s: str) -> list[str]:
     return re.findall(RE_PITCH_NUM, s)
-
-
-def repack_accent_dict(acc_dict: dict[str, OrderedSet[FormattedEntry]]) -> AccentDict:
-    return AccentDict({headword: tuple(entries) for headword, entries in acc_dict.items()})
 
 
 def nakaten_separated_katakana_reading(html_notation: str) -> str:
@@ -86,5 +85,18 @@ def nakaten_separated_katakana_reading(html_notation: str) -> str:
     return re.sub(RE_PITCH_TAG, "", html_notation).replace("°", "゚")
 
 
-def split_html_notation(entry: FormattedEntry) -> Iterable[str]:
-    return filter(bool, map(str.strip, re.split(RE_PITCH_TAG, entry.html_notation)))
+def split_html_notation(html_notation: str) -> Iterable[str]:
+    return filter(bool, map(str.strip, re.split(RE_PITCH_TAG, html_notation)))
+
+
+def get_tsv_reader(f: typing.Iterable[str]) -> csv.DictReader:
+    """
+    Prepare a reader to load the accent dictionary.
+    Keys are already included in the csv file.
+    """
+    return csv.DictReader(
+        f,
+        dialect="excel-tab",
+        delimiter="\t",
+        quoting=csv.QUOTE_NONE,
+    )

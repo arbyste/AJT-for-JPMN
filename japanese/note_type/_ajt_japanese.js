@@ -1,5 +1,5 @@
 /*
- * AJT Japanese JS 24.7.12.1
+ * AJT Japanese JS 24.7.15.2
  * Copyright: Ajatt-Tools and contributors; https://github.com/Ajatt-Tools
  * License: GNU AGPL, version 3 or later; https://www.gnu.org/licenses/agpl-3.0.html
  */
@@ -8,8 +8,12 @@ function ajt__kana_to_moras(text) {
     return text.match(/.[°゚]?[ァィゥェォャュョぁぃぅぇぉゃゅょ]?/gu);
 }
 
+function ajt__norm_handakuten(text) {
+    return text.replace(/\u{b0}/gu, "\u{309a}");
+}
+
 function ajt__make_pattern(kana, pitch_type, pitch_num) {
-    const moras = ajt__kana_to_moras(kana);
+    const moras = ajt__kana_to_moras(ajt__norm_handakuten(kana));
     switch (pitch_type) {
         case "atamadaka":
             return (
@@ -173,6 +177,16 @@ function ajt__create_popups() {
 }
 
 /* Setup */
-ajt__popup_cleanup();
-ajt__create_popups();
-ajt__reformat_multi_furigana();
+function ajt__main() {
+    ajt__popup_cleanup();
+    ajt__create_popups();
+    ajt__reformat_multi_furigana();
+}
+
+if (document.readyState === "loading") {
+    // Loading hasn't finished yet
+    document.addEventListener("DOMContentLoaded", ajt__main);
+} else {
+    // `DOMContentLoaded` has already fired
+    ajt__main();
+}

@@ -1,4 +1,6 @@
-<img style="float: right; width: 128px;" src="https://avatars.githubusercontent.com/u/69172625?s=200&v=4">
+<div style="text-align: center;">
+<img style="max-width: 128px; max-height: 128px;" src="https://avatars.githubusercontent.com/u/69172625?s=200&v=4">
+</div>
 
 ## AJT Japanese &mdash; edit config
 
@@ -123,6 +125,12 @@ Parameters:
 * `cache_lookups`.
   Size of cache.
   Used internally.
+* `insert_scripts_into_templates`.
+  The add-on inserts additional JavaScript and CSS code into the card templates
+  to enable the display of pitch accent information on mouse hover.
+  If you do not require this feature,
+  you can disable the script loading
+  (and then remove the added scripts from your card templates).
 
 ****
 

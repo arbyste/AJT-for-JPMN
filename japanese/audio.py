@@ -30,7 +30,7 @@ from .config_view import JapaneseConfig
 from .config_view import config_view as cfg
 from .helpers.inflections import is_inflected
 from .helpers.mingle_readings import split_possible_furigana
-from .helpers.sqlite3_buddy import Sqlite3Buddy, sqlite3_buddy
+from .helpers.sqlite3_buddy import Sqlite3Buddy
 from .helpers.tokens import ParseableToken, tokenize
 from .helpers.unique_files import ensure_unique_files
 from .mecab_controller.kana_conv import to_hiragana, to_katakana
@@ -274,6 +274,10 @@ def report_audio_init_errors(result: InitResult) -> None:
 class AnkiAudioSourceManagerFactory(AudioSourceManagerFactory):
     _config: JapaneseConfig
 
+    def __init__(self, config: JapaneseConfig):
+        super().__init__(config)
+        assert self._db_path is None
+
     def request_new_session(self, db: Sqlite3Buddy) -> AnkiAudioSourceManager:
         """
         If tasks are being done in a different thread, prepare a new db connection
@@ -285,6 +289,23 @@ class AnkiAudioSourceManagerFactory(AudioSourceManagerFactory):
             db=db,
             audio_sources=self._audio_sources,
         )
+
+    def purge_everything(
+        self,
+        *,
+        on_finish: Callable[[], Any],
+    ) -> None:
+        assert mw
+
+        def on_finish_wrapper():
+            self._set_sources([])
+            on_finish()
+
+        QueryOp(
+            parent=mw,
+            op=lambda collection: self._purge_sources(),
+            success=lambda result: on_finish_wrapper(),
+        ).run_in_background()
 
     def init_sources(
         self,
@@ -311,7 +332,7 @@ class AnkiAudioSourceManagerFactory(AudioSourceManagerFactory):
         Used to skip unnecessary re-init operations.
         Count only enabled sources. Disabled sources have no effect on the audio manager's operation.
         """
-        with sqlite3_buddy() as db:
+        with Sqlite3Buddy() as db:
             session = self.request_new_session(db)
             return session.already_initialized() != session.must_be_initialized()
 
@@ -319,12 +340,12 @@ class AnkiAudioSourceManagerFactory(AudioSourceManagerFactory):
         """
         Return statistics, running in a new session.
         """
-        with sqlite3_buddy() as db:
+        with Sqlite3Buddy() as db:
             session = self.request_new_session(db)
             return session.total_stats()
 
     def _remove_unused_audio_data(self) -> None:
-        with sqlite3_buddy() as db:
+        with Sqlite3Buddy() as db:
             session = self.request_new_session(db)
             session.remove_unused_audio_data()
 

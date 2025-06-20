@@ -18,9 +18,9 @@ from .config_view import ToolbarButtonConfig
 from .config_view import config_view as cfg
 from .definitions import sakura_client
 from .helpers.profiles import TaskCaller
-from .helpers.sqlite3_buddy import sqlite3_buddy
+from .helpers.sqlite3_buddy import Sqlite3Buddy
 from .helpers.tokens import clean_furigana
-from .reading import fgen
+from .reading import generate_furigana
 from .tasks import DoTasks
 from .widgets.anki_style import fix_default_anki_style
 from .widgets.audio_search import AnkiAudioSearchDialog
@@ -104,7 +104,7 @@ def search_audio(editor: Editor) -> None:
 
     assert editor.note is not None
 
-    with sqlite3_buddy() as db:
+    with Sqlite3Buddy() as db:
         session = aud_src_mgr.request_new_session(db)
         dialog = AnkiAudioSearchDialog(session)
         fix_default_anki_style(dialog.table)
@@ -127,7 +127,11 @@ def search_audio(editor: Editor) -> None:
         cfg.write_config()
         # process results
         results = dialog.files_to_add()
-        editor.note[dialog.destination_field_name] += format_audio_tags(results)
+        editor.note[dialog.destination_field_name] = (
+            editor.note[dialog.destination_field_name]
+            + (cfg.audio_settings.tag_separator if editor.note[dialog.destination_field_name] else "")
+            + format_audio_tags(results)
+        )
         session.download_and_save_tags(results)
 
 
@@ -159,13 +163,13 @@ def query_buttons() -> Iterable[ToolbarButton]:
         ),
         ToolbarButton(
             id="furigana_button",
-            on_press=modify_field(fgen.generate_furigana),
+            on_press=modify_field(generate_furigana),
             tip="Generate furigana in the field",
             conf=cfg.toolbar.furigana_button,
         ),
         ToolbarButton(
             id="hiragana_button",
-            on_press=modify_field(functools.partial(fgen.generate_furigana, full_hiragana=True)),
+            on_press=modify_field(functools.partial(generate_furigana, full_hiragana=True)),
             tip="Reconvert the field as hiragana",
             conf=cfg.toolbar.hiragana_button,
         ),

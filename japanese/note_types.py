@@ -1,8 +1,8 @@
 # Copyright: Ajatt-Tools and contributors; https://github.com/Ajatt-Tools
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
-import glob
 import os.path
 from collections.abc import Sequence
+from typing import Any, Optional
 
 import anki.collection
 from anki.models import NotetypeNameId
@@ -11,46 +11,62 @@ from aqt.operations import CollectionOp
 
 from .config_view import config_view as cfg
 from .helpers.consts import ADDON_NAME
-from .note_type.bundled_files import (
-    BUNDLED_CSS_FILE,
-    BUNDLED_JS_FILE,
-    BundledNoteTypeSupportFile,
-    get_file_version,
+from .helpers.profiles import ProfileFurigana
+from .note_type.bundled_files import BUNDLED_CSS_FILE, BundledCSSFile, get_file_version
+from .note_type.files_in_col_media import (
+    FileInCollection,
+    find_ajt_scripts_in_collection,
 )
 from .note_type.imports import ensure_css_imported, ensure_js_imported
+from .tasks import note_type_matches
 
 
-def not_recent_version(file: BundledNoteTypeSupportFile) -> bool:
-    return get_file_version(file.file_path) > get_file_version(file.path_in_col())
+def not_recent_version(file: BundledCSSFile) -> bool:
+    return file.version > get_file_version(file.path_in_col()).version
 
 
-def save_to_col(file: BundledNoteTypeSupportFile) -> None:
-    with open(file.file_path, encoding="utf-8") as in_f, open(file.path_in_col(), "w", encoding="utf-8") as out_f:
-        out_f.write(in_f.read())
+def save_to_col(file: BundledCSSFile) -> None:
+    with open(file.path_in_col(), "w", encoding="utf-8") as of:
+        of.write(file.text_content)
 
 
 def is_debug_enabled() -> bool:
     return "QTWEBENGINE_REMOTE_DEBUGGING" in os.environ
 
 
-def ensure_files_saved():
-    for file in (BUNDLED_JS_FILE, BUNDLED_CSS_FILE):
-        if not_recent_version(file) or is_debug_enabled():
-            save_to_col(file)
-            print(f"Created new file: {file.name_in_col}")
+def ensure_bundled_css_file_saved() -> None:
+    """
+    Save the AJT Japanese CSS file to the 'collection.media' folder.
+    """
+    if not_recent_version(BUNDLED_CSS_FILE) or is_debug_enabled():
+        save_to_col(BUNDLED_CSS_FILE)
+        print(f"Created new file: {BUNDLED_CSS_FILE.name_in_col}")
+
+
+def field_names_from_model_dict(model_dict: dict[str, Any]) -> frozenset[str]:
+    """
+    Return all field names in the provided note type, e.g. ["VocabKanji", "SentKanji", "VocabDef"].
+    """
+    return frozenset(field["name"] for field in model_dict["flds"])
+
+
+def is_relevant_model(model_dict: Optional[dict[str, Any]]) -> bool:
+    assert model_dict, "model dict must not be None"
+    all_field_names = field_names_from_model_dict(model_dict)
+    return any(
+        note_type_matches(model_dict, profile) and profile.source in all_field_names
+        for profile in cfg.iter_profiles()
+        if isinstance(profile, ProfileFurigana)
+    )
 
 
 def collect_all_relevant_models() -> Sequence[NotetypeNameId]:
+    """
+    Find all note types (models) that require additional JS+CSS imports
+    to enable the display of pitch accent information on mouse hover.
+    """
     assert mw
-    return [
-        model
-        for model in mw.col.models.all_names_and_ids()
-        if any(
-            profile.note_type.lower() in model.name.lower()
-            for profile in cfg.iter_profiles()
-            if profile.mode == "furigana"
-        )
-    ]
+    return [model for model in mw.col.models.all_names_and_ids() if is_relevant_model(mw.col.models.get(model.id))]
 
 
 def ensure_imports_added_for_model(col: anki.collection.Collection, model: NotetypeNameId) -> bool:
@@ -67,9 +83,10 @@ def ensure_imports_added_for_model(col: anki.collection.Collection, model: Notet
     return is_dirty
 
 
-def ensure_imports_added_op(col: anki.collection.Collection) -> anki.collection.OpChanges:
+def ensure_imports_added_op(
+    col: anki.collection.Collection, models: Sequence[NotetypeNameId]
+) -> anki.collection.OpChanges:
     assert mw
-    models = collect_all_relevant_models()
     pos = col.add_custom_undo_entry(f"{ADDON_NAME}: Add imports to {len(models)} models.")
     is_dirty = False
     for model in models:
@@ -78,25 +95,29 @@ def ensure_imports_added_op(col: anki.collection.Collection) -> anki.collection.
     return col.merge_undo_entries(pos) if is_dirty else anki.collection.OpChanges()
 
 
-def ensure_imports_added() -> None:
+def ensure_imports_added(models: Sequence[NotetypeNameId]) -> None:
     assert mw
-    CollectionOp(mw, lambda col: ensure_imports_added_op(col)).success(lambda _: None).run_in_background()
+    CollectionOp(mw, lambda col: ensure_imports_added_op(col, models)).success(lambda _: None).run_in_background()
 
 
-def remove_old_versions() -> None:
+def remove_old_file_versions() -> None:
     assert mw
-    all_ajt_file_names = frozenset(glob.glob("_ajt_japanese*.*", root_dir=mw.col.media.dir()))
-    current_ajt_file_names = frozenset((BUNDLED_JS_FILE.name_in_col, BUNDLED_CSS_FILE.name_in_col))
-    for old_file_name in all_ajt_file_names - current_ajt_file_names:
-        os.unlink(os.path.join(mw.col.media.dir(), old_file_name))
-        print(f"Removed old version: {old_file_name}")
+    saved_files: frozenset[FileInCollection] = find_ajt_scripts_in_collection() - {BUNDLED_CSS_FILE.name_in_col}
+    for file in saved_files:
+        if file.version < BUNDLED_CSS_FILE.version:
+            os.unlink(os.path.join(mw.col.media.dir(), file.name))
+            print(f"Removed old version: {file.name}")
 
 
 def prepare_note_types() -> None:
-    assert mw
-    ensure_files_saved()
-    ensure_imports_added()
-    remove_old_versions()
+    if not cfg.insert_scripts_into_templates:
+        # Global switch (in Advanced settings, not shown in the GUI settings.)
+        return
+    if models := collect_all_relevant_models():
+        # Add scripts to templates only if the user has profiles (tasks) where furigana needs to be generated.
+        ensure_bundled_css_file_saved()
+        ensure_imports_added(models)
+        remove_old_file_versions()
 
 
 def init():

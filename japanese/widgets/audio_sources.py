@@ -5,6 +5,7 @@ import dataclasses
 import io
 import re
 from collections.abc import Iterable
+from typing import Optional
 
 from aqt.qt import *
 
@@ -12,7 +13,7 @@ from ..ajt_common.utils import clamp
 from ..audio_manager.abstract import AudioSourceManagerFactoryABC
 from ..audio_manager.basic_types import AudioSourceConfig
 from ..audio_manager.source_manager import normalize_filename
-from ..helpers.sqlite3_buddy import sqlite3_buddy
+from ..helpers.sqlite3_buddy import Sqlite3Buddy
 from .table import CellContent, ExpandingTableWidget, TableRow
 
 
@@ -75,7 +76,7 @@ class AudioSourcesTable(ExpandingTableWidget):
         removed: list[AudioSourceConfig] = []
         gui_selected_sources = frozenset((selected.name, selected.url) for selected in self.iterateSelectedConfigs())
 
-        with sqlite3_buddy() as db:
+        with Sqlite3Buddy() as db:
             session = self._audio_mgr.request_new_session(db)
             for cached in session.audio_sources:
                 if (cached.name, cached.url) in gui_selected_sources:
@@ -119,8 +120,8 @@ class AudioSourcesTable(ExpandingTableWidget):
         # so the user has to uncheck it to trigger an automatic row deletion.
         return isinstance(cell, QCheckBox) and cell.isChecked() or super().isCellFilled(cell)
 
-    def addSource(self, source: AudioSourceConfig, index: int = None) -> None:
-        self.addRow((checkbox := SourceEnableCheckbox(), source.name, source.url), index=index)
+    def addSource(self, source: AudioSourceConfig, index: Optional[int] = None) -> None:
+        self.addRow((checkbox := SourceEnableCheckbox(), source.name, source.url), row_idx=index)
         # The checkbox widget has to notify the table widget when its state changes.
         # Otherwise, the table will not automatically add/remove rows.
         qconnect(checkbox.stateChanged, lambda checked: self.onCellChanged(self.currentRow()))

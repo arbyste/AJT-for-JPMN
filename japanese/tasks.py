@@ -15,11 +15,11 @@ from anki.utils import strip_html_media
 from aqt import mw
 from aqt.utils import tooltip
 
-from .audio import AnkiAudioSourceManager, FileSaveResults, format_audio_tags
+from .audio import FileSaveResults, aud_src_mgr, format_audio_tags
 from .audio_manager.basic_types import FileUrlData
 from .config_view import config_view as cfg
+from .furigana.gen_furigana import FuriganaGen
 from .helpers.profiles import (
-    ColorCodePitchFormat,
     PitchOutputFormat,
     Profile,
     ProfileAudio,
@@ -27,7 +27,8 @@ from .helpers.profiles import (
     ProfilePitch,
     TaskCaller,
 )
-from .helpers.sqlite3_buddy import sqlite3_buddy
+from .helpers.sqlite3_buddy import Sqlite3Buddy
+from .pitch_accents.accent_lookup import AccentLookup
 from .reading import fgen, format_pronunciations, lookup
 
 
@@ -46,6 +47,7 @@ def iter_tasks(note: Note, src_field: Optional[str] = None) -> Iterable[Profile]
 class DoTask:
     _subclasses_map: dict[type[Profile], type["DoTask"]] = {}  # e.g. ProfileFurigana -> AddFurigana
     _key_class_param: str = "task_type"
+    _db: Sqlite3Buddy
 
     def __init_subclass__(cls, **kwargs) -> None:
         task_type: type[Profile] = kwargs.pop(cls._key_class_param)  # suppresses ide warning
@@ -56,10 +58,10 @@ class DoTask:
         subclass = cls._subclasses_map[type(task)]
         return object.__new__(subclass)
 
-    def __init__(self, task, caller: TaskCaller, aud_src_mgr: AnkiAudioSourceManager):
+    def __init__(self, task, caller: TaskCaller, db: Sqlite3Buddy) -> None:
         self._task = task
         self._caller = caller
-        self._aud_src_mgr = aud_src_mgr
+        self._db = db
 
     def _generate_text(self, src_text: str) -> str:
         raise NotImplementedError()
@@ -73,8 +75,14 @@ class DoTask:
 
 
 class AddFurigana(DoTask, task_type=ProfileFurigana):
+    _fgen: FuriganaGen
+
+    def __init__(self, task: Profile, caller: TaskCaller, db: Sqlite3Buddy) -> None:
+        super().__init__(task, caller, db)
+        self._fgen = fgen.with_new_buddy(db)
+
     def _generate_text(self, src_text: str) -> str:
-        return fgen.generate_furigana(
+        return self._fgen.generate_furigana(
             src_text,
             split_morphemes=self._task.split_morphemes,
             output_format=self._task.color_code_pitch,
@@ -82,9 +90,15 @@ class AddFurigana(DoTask, task_type=ProfileFurigana):
 
 
 class AddPitch(DoTask, task_type=ProfilePitch):
+    _lookup: AccentLookup
+
+    def __init__(self, task: Profile, caller: TaskCaller, db: Sqlite3Buddy) -> None:
+        super().__init__(task, caller, db)
+        self._lookup = lookup.with_new_buddy(db)
+
     def _generate_text(self, src_text: str) -> str:
         return format_pronunciations(
-            pronunciations=lookup.get_pronunciations(src_text, use_mecab=self._task.split_morphemes),
+            pronunciations=self._lookup.get_pronunciations(src_text, use_mecab=self._task.split_morphemes),
             output_format=PitchOutputFormat[self._task.output_format],
             sep_single=cfg.pitch_accent.reading_separator,
             sep_multi=cfg.pitch_accent.word_separator,
@@ -93,16 +107,18 @@ class AddPitch(DoTask, task_type=ProfilePitch):
 
 class AddAudio(DoTask, task_type=ProfileAudio):
     def _generate_text(self, src_text: str) -> str:
-        search_results = self._aud_src_mgr.search_audio(
+        session = aud_src_mgr.request_new_session(self._db)
+        search_results = session.search_audio(
             src_text,
             split_morphemes=self._task.split_morphemes,
             ignore_inflections=cfg.audio_settings.ignore_inflections,
             stop_if_one_source_has_results=cfg.audio_settings.stop_if_one_source_has_results,
         )[: cfg.audio_settings.maximum_results]
         # "Download and save tags" has to run on main as it will launch a new QueryOp.
+        assert mw
         mw.taskman.run_on_main(
             functools.partial(
-                self._aud_src_mgr.download_and_save_tags,
+                session.download_and_save_tags,
                 search_results,
                 on_finish=self._report_results,
             )
@@ -115,22 +131,22 @@ class AddAudio(DoTask, task_type=ProfileAudio):
         """
         if not self._caller.cfg.audio_download_report:
             return
-        txt = io.StringIO()
+        buffer = io.StringIO()
         if r.successes:
-            txt.write(f"<b>Added {len(r.successes)} files to the collection.</b><ol>")
-            txt.write("".join(f"<li>{file.desired_filename}</li>" for file in r.successes))
-            txt.write("</ol>")
+            buffer.write(f"<b>Added {len(r.successes)} files to the collection.</b><ol>")
+            buffer.write("".join(f"<li>{file.desired_filename}</li>" for file in r.successes))
+            buffer.write("</ol>")
         if r.fails:
-            txt.write(f"<b>Failed {len(r.fails)} files.</b><ol>")
-            txt.write(
+            buffer.write(f"<b>Failed {len(r.fails)} files.</b><ol>")
+            buffer.write(
                 "".join(
                     f"<li>{fail.file.desired_filename}: {fail.describe_short()}</li>"
                     for fail in r.fails
                     if isinstance(fail.file, FileUrlData)
                 )
             )
-            txt.write("</ol>")
-        if txt := txt.getvalue():
+            buffer.write("</ol>")
+        if txt := buffer.getvalue():
             return tooltip(txt, period=7000, y_offset=80 + 18 * (len(r.successes) + len(r.fails)))
 
 
@@ -161,16 +177,14 @@ class DoTasks:
         self._overwrite = overwrite
 
     def run(self, changed: bool = False) -> bool:
-        from .audio import aud_src_mgr
 
-        with sqlite3_buddy() as db:
-            session = aud_src_mgr.request_new_session(db)
+        with Sqlite3Buddy() as db:
             for task in self._tasks:
                 if task.should_answer_to(self._caller) and task.applies_to_note(self._note):
-                    changed = self._do_task(task, aud_mgr=session) or changed
+                    changed = self._do_task(task, db) or changed
             return changed
 
-    def _do_task(self, task: Profile, aud_mgr: AnkiAudioSourceManager) -> bool:
+    def _do_task(self, task: Profile, db: Sqlite3Buddy) -> bool:
         changed = False
 
         if self._field_contains_garbage(task.destination):
@@ -181,7 +195,7 @@ class DoTasks:
             self._note[task.destination] = DoTask(
                 task,
                 self._caller,
-                aud_mgr,
+                db,
             ).run(
                 src_text,
                 self._note[task.destination],
@@ -206,6 +220,7 @@ class DoTasks:
         """
         Return source text with sound and image tags removed.
         """
+        assert mw
         return mw.col.media.strip(self._note[task.source]).strip()
 
     def _field_contains_garbage(self, field_name: str) -> bool:
@@ -226,6 +241,7 @@ def on_focus_lost(changed: bool, note: Note, field_idx: int) -> bool:
 
 def should_generate(note: Note) -> bool:
     """Generate when a new note is added by Yomichan or Mpvacious."""
+    assert mw
     return mw.app.activeWindow() is None and note.id == 0
 
 

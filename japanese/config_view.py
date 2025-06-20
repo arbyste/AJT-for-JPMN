@@ -312,6 +312,10 @@ class SvgPitchGraphOptionsConfigView(ConfigSubViewBase):
         return self["font_size"]
 
     @property
+    def letter_spacing(self) -> float:
+        return self["letter_spacing"]
+
+    @property
     def devoiced_circle_width(self) -> float:
         return self["devoiced_circle_width"]
 
@@ -364,6 +368,10 @@ class JapaneseConfig(AddonConfigManager):
     @property
     def cache_lookups(self) -> int:
         return int(self["cache_lookups"])
+
+    @property
+    def insert_scripts_into_templates(self) -> bool:
+        return bool(self["insert_scripts_into_templates"])
 
     @property
     def furigana(self) -> FuriganaConfigView:

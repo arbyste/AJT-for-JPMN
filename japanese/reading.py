@@ -8,16 +8,18 @@ from aqt import gui_hooks
 
 from .config_view import config_view as cfg
 from .furigana.gen_furigana import FuriganaGen, discard_extra_readings
-from .helpers.profiles import PitchOutputFormat
+from .helpers.profiles import ColorCodePitchFormat, PitchOutputFormat
+from .helpers.sqlite3_buddy import Sqlite3Buddy
 from .mecab_controller.kana_conv import to_hiragana
 from .mecab_controller.mecab_controller import MecabController
-from .pitch_accents.acc_dict_mgr import AccentDict, AccentDictManager, FormattedEntry
+from .pitch_accents.acc_dict_mgr_2 import AccentDictManager2
 from .pitch_accents.accent_lookup import AccentLookup
 from .pitch_accents.basic_types import (
     PitchColor,
     count_moras,
     pitch_type_from_pitch_num,
 )
+from .pitch_accents.common import AccentDict, FormattedEntry
 from .pitch_accents.styles import PITCH_COLOR_PLACEHOLDER, STYLE_MAP
 from .pitch_accents.svg_graphs import SvgPitchGraphMaker
 
@@ -104,12 +106,28 @@ def format_pronunciations(
     return txt
 
 
+def generate_furigana(
+    src_text: str,
+    *,
+    split_morphemes: bool = True,
+    full_hiragana: bool = False,
+    output_format: ColorCodePitchFormat = ColorCodePitchFormat(0),
+) -> str:
+    with Sqlite3Buddy() as db:
+        return fgen.with_new_buddy(db).generate_furigana(
+            src_text,
+            split_morphemes=split_morphemes,
+            full_hiragana=full_hiragana,
+            output_format=output_format,
+        )
+
+
 # Entry point
 ##########################################################################
 
 mecab = MecabController(verbose=True, cache_max_size=cfg.cache_lookups)
 svg_graph_maker = SvgPitchGraphMaker(options=cfg.svg_graphs)
-acc_dict = AccentDictManager()
-lookup = AccentLookup(acc_dict, cfg, mecab)
-gui_hooks.main_window_did_init.append(acc_dict.reload_from_disk)
-fgen = FuriganaGen(cfg, mecab, lookup)
+acc_dict = AccentDictManager2()
+lookup = AccentLookup(cfg, mecab)
+gui_hooks.main_window_did_init.append(acc_dict.ensure_dict_ready)
+fgen = FuriganaGen(cfg, lookup, mecab)

@@ -17,7 +17,6 @@ from .ajt_common.addon_config import (
     set_config_action,
     set_config_update_action,
 )
-from .ajt_common.consts import ADDON_SERIES
 from .ajt_common.enum_select_combo import EnumSelectCombo
 from .ajt_common.grab_key import ShortCutGrabButton
 from .ajt_common.utils import ui_translate
@@ -25,7 +24,7 @@ from .audio import aud_src_mgr, show_audio_init_result_tooltip
 from .audio_manager.basic_types import AudioSourceConfig
 from .audio_manager.source_manager import InitResult, TotalAudioStats
 from .config_view import config_view as cfg
-from .helpers.consts import THIS_ADDON_MODULE
+from .helpers.consts import ADDON_NAME, THIS_ADDON_MODULE
 from .helpers.misc import split_list
 from .helpers.profiles import (
     ColorCodePitchFormat,
@@ -36,8 +35,8 @@ from .helpers.profiles import (
     ProfilePitch,
     TaskCaller,
 )
-from .note_types import ensure_imports_added
-from .pitch_accents.user_accents import UserAccentData
+from .note_types import prepare_note_types
+from .pitch_accents.consts import USER_DATA_CSV_PATH
 from .reading import acc_dict
 from .widgets.addon_opts import EditableSelector, relevant_field_names
 from .widgets.anki_style import fix_default_anki_style
@@ -492,8 +491,7 @@ class AudioSourcesEditTable(QWidget):
         saveGeom(d, d.name)
 
     def _on_purge_db_clicked(self) -> None:
-        aud_src_mgr.purge_everything()
-        self._populate()
+        aud_src_mgr.purge_everything(on_finish=self._populate)
 
     def _on_apply_clicked(self) -> None:
         self._apply_button.setEnabled(False)
@@ -541,7 +539,7 @@ class SettingsDialog(QDialog, MgrPropMixIn):
         self._definitions_settings = GroupBoxWrapper(DefinitionsSettingsForm(cfg.definitions))
 
         # Overrides tab
-        self._accents_override = PitchOverrideWidget(self, file_path=UserAccentData.source_csv_path)
+        self._accents_override = PitchOverrideWidget(self, file_path=USER_DATA_CSV_PATH)
 
         # Finish layout
         self._tabs = QTabWidget()
@@ -603,7 +601,7 @@ class SettingsDialog(QDialog, MgrPropMixIn):
 
     def _setup_ui(self) -> None:
         cast(QDialog, self).setWindowModality(Qt.WindowModality.ApplicationModal)
-        cast(QDialog, self).setWindowTitle(f"{ADDON_SERIES} {self.name}")
+        cast(QDialog, self).setWindowTitle(f"{ADDON_NAME} - Options")
         self.setMinimumSize(800, 600)
         tweak_window(self)
         self.setLayout(self.make_layout())
@@ -646,10 +644,10 @@ class SettingsDialog(QDialog, MgrPropMixIn):
         cfg.write_config()
         self._accents_override.save_to_disk()
         # Reload
-        acc_dict.reload_from_disk()
+        acc_dict.reload_user_accents_from_disk()
         aud_src_mgr.init_sources(on_finish=show_audio_init_result_tooltip)
         # if new profiles were added, add imports to the note types.
-        ensure_imports_added()
+        prepare_note_types()
         return super().accept()
 
     def _add_advanced_button(self) -> None:

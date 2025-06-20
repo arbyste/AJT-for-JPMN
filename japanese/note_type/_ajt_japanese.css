@@ -1,5 +1,5 @@
 /*
- * AJT Japanese CSS 24.7.12.3
+ * AJT Japanese CSS 24.7.14.1
  * Copyright: Ajatt-Tools and contributors; https://github.com/Ajatt-Tools
  * License: GNU AGPL, version 3 or later; https://www.gnu.org/licenses/agpl-3.0.html
  */
@@ -257,6 +257,7 @@
     font-size: 12px;
     line-height: 14px;
     user-select: none;
-    font-family: "Noto Sans", "Droid Sans", "DejaVu Sans", "Liberation Sans", Roboto, Cantarell, "Segoe UI", Arial,
-        Meiryo, Oxygen, Ubuntu, "Helvetica Neue", Helvetica, "Noto Color Emoji", "Noto Sans CJK JP", Sans, sans-serif;
+    font-family:
+        "Noto Sans", "Droid Sans", "DejaVu Sans", "Liberation Sans", Roboto, Cantarell, "Segoe UI", Arial, Meiryo,
+        Oxygen, Ubuntu, "Helvetica Neue", Helvetica, "Noto Color Emoji", "Noto Sans CJK JP", Sans, sans-serif;
 }
