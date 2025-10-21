@@ -1,8 +1,8 @@
 {
   "cache_lookups": 8192,
   "last_file_save_location": "",
-  "show_welcome_guide": true,
-  "insert_scripts_into_templates": true,
+  "show_welcome_guide": false,
+  "insert_scripts_into_templates": false,
   "profiles": [
     {
       "name": "Add furigana for sentence",
@@ -54,19 +54,19 @@
     "output_hiragana": false,
     "kana_lookups": true,
     "skip_numbers": true,
-    "reading_separator": ", ",
-    "word_separator": "; ",
-    "blocklisted_words": "は,と,た,ね,さ,いる,ましょ,び,たち,こと,へ,たい,が,ば,から,て,ん,に,や,で,ます,し,です,き,だ,も,私,する,か,よ,てる,う,お,ない,な,の,せる,そりゃ,あもう,め,げ",
-    "maximum_results": 3,
+    "reading_separator": "・",
+    "word_separator": "、",
+    "blocklisted_words": "こと,へ,か,よ,ん,だ,び,の,や,ね,ば,て,と,た,が,に,な,は,も,ます,から,いる,たち,てる,う,ましょ,たい,する,です,ない",
+    "maximum_results": 100,
     "discard_mode": "discard_extra",
     "html_style": "none"
   },
   "furigana": {
     "skip_numbers": true,
     "prefer_literal_pronunciation": false,
-    "reading_separator": ",",
+    "reading_separator": ", ",
     "blocklisted_words": "人",
-    "mecab_only": "母,先生,弟,空,猫,お前,女性,体,男,首,女,彼,顔,お,木,頭,僕,行く,私",
+    "mecab_only": "彼,猫,首,母,顔,木,頭,私,弟,空,体,行く",
     "maximum_results": 1,
     "discard_mode": "discard_extra"
   },
